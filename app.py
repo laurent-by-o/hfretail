@@ -6,8 +6,10 @@ import os
 import pandas as pd
 import json
 from streamlit_mic_recorder import mic_recorder
+import io
 from io import BytesIO
 from dotenv import load_dotenv
+from pydub import AudioSegment
 
 load_dotenv()  # Load environment variables
 OPENAI_KEY = os.getenv('OPENAI_API_KEY')
@@ -44,6 +46,23 @@ def process_audio_input(audio_data, inventory_df):
             results = search_inventory(intent_data, inventory_df)
             st.write("Inventory Results:")
             st.dataframe(results)
+
+def convert_audio_for_whisper(audio_bytes, mime_type):
+    """Convert audio to WAV format that Whisper expects"""
+    try:
+        # Convert bytes to AudioSegment
+        audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format=mime_type.split('/')[-1])
+        
+        # Export as WAV
+        wav_bytes = io.BytesIO()
+        audio_segment.export(wav_bytes, format='wav')
+        wav_bytes.seek(0)
+        wav_bytes.name = "recording.wav"
+        
+        return wav_bytes
+    except Exception as e:
+        st.error(f"Error converting audio: {str(e)}")
+        return None
 
 def transcribe_audio(audio_file):
     """Transcribe audio using OpenAI Whisper"""
@@ -119,15 +138,26 @@ def main():
         
         if audio and not st.session_state.recording_done:
             st.session_state.audio_data = audio['bytes']
+            st.session_state.mime_type = audio.get('mime_type', 'audio/wav')
             st.session_state.recording_done = True
             st.audio(audio['bytes'])
             st.rerun()
             
         if st.session_state.recording_done:
             if st.button("Process Recording", key="process_recording"):
-                audio_bytes = BytesIO(st.session_state.audio_data)
-                audio_bytes.name = "recording.wav"
-                process_audio_input(audio_bytes, inventory_df)
+                try:
+                    st.write("Converting audio...")
+                    st.write(f"Audio format: {st.session_state.mime_type}")
+                    st.write(f"Audio size: {len(st.session_state.audio_data)} bytes")
+                    
+                    audio_file = convert_audio_for_whisper(
+                        st.session_state.audio_data, 
+                        st.session_state.mime_type
+                    )
+                    if audio_file:
+                        process_audio_input(audio_file, inventory_df)
+                except Exception as e:
+                    st.error(f"Error processing audio: {str(e)}")
             
             if st.button("Record Again", key="record_again"):
                 st.session_state.recording_done = False

@@ -3,3 +3,4 @@ openai==1.60.1
 firebase-admin==6.6.0
 python-dotenv==1.0.1
 streamlit_mic_recorder==0.0.8
+pydub
