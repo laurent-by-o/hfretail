@@ -1,15 +1,19 @@
+# Standard library imports
+import os
+import json
+import io
+import tempfile
+import subprocess
+
+# Third-party imports
+import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
-import streamlit as st
 import openai
-import os
 import pandas as pd
-import json
-from streamlit_mic_recorder import mic_recorder
-import io
-from io import BytesIO
-from dotenv import load_dotenv
 from pydub import AudioSegment
+from dotenv import load_dotenv
+from streamlit_mic_recorder import mic_recorder
 
 load_dotenv()  # Load environment variables
 OPENAI_KEY = os.getenv('OPENAI_API_KEY')
@@ -50,16 +54,42 @@ def process_audio_input(audio_data, inventory_df):
 def convert_audio_for_whisper(audio_bytes, mime_type):
     """Convert audio to WAV format that Whisper expects"""
     try:
-        # Convert bytes to AudioSegment
-        audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format=mime_type.split('/')[-1])
+        # First, write the bytes to a temporary file        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_in:
+            temp_in.write(audio_bytes)
+            temp_in_path = temp_in.name
+            
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_out:
+            temp_out_path = temp_out.name
+            
+        # Convert using ffmpeg directly
+        command = [
+            'ffmpeg',
+            '-i', temp_in_path,
+            '-acodec', 'pcm_s16le',
+            '-ar', '16000',
+            '-ac', '1',
+            '-f', 'wav',
+            temp_out_path
+        ]
         
-        # Export as WAV
-        wav_bytes = io.BytesIO()
-        audio_segment.export(wav_bytes, format='wav')
-        wav_bytes.seek(0)
-        wav_bytes.name = "recording.wav"
+        process = subprocess.run(command, capture_output=True, text=True)
+        
+        if process.returncode != 0:
+            st.error(f"FFmpeg error: {process.stderr}")
+            return None
+            
+        # Read the converted file
+        with open(temp_out_path, 'rb') as f:
+            wav_bytes = io.BytesIO(f.read())
+            wav_bytes.name = "recording.wav"
+            
+        # Cleanup
+        os.unlink(temp_in_path)
+        os.unlink(temp_out_path)
         
         return wav_bytes
+        
     except Exception as e:
         st.error(f"Error converting audio: {str(e)}")
         return None
@@ -149,7 +179,8 @@ def main():
                     st.write("Converting audio...")
                     st.write(f"Audio format: {st.session_state.mime_type}")
                     st.write(f"Audio size: {len(st.session_state.audio_data)} bytes")
-                    
+                    st.write("Audio data starts with:", st.session_state.audio_data[:20])
+
                     audio_file = convert_audio_for_whisper(
                         st.session_state.audio_data, 
                         st.session_state.mime_type
@@ -158,7 +189,8 @@ def main():
                         process_audio_input(audio_file, inventory_df)
                 except Exception as e:
                     st.error(f"Error processing audio: {str(e)}")
-            
+                    st.error("Full error:", str(e.__class__.__name__))
+
             if st.button("Record Again", key="record_again"):
                 st.session_state.recording_done = False
                 st.rerun()
