@@ -54,31 +54,38 @@ def process_audio_input(audio_data, inventory_df):
 def convert_audio_for_whisper(audio_bytes, mime_type):
     """Convert audio to WAV format that Whisper expects"""
     try:
-        # First, write the bytes to a temporary file        
+        st.write("Starting conversion...")  # Debug
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_in:
             temp_in.write(audio_bytes)
             temp_in_path = temp_in.name
+            st.write(f"Input file created: {temp_in_path}")  # Debug
             
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_out:
             temp_out_path = temp_out.name
+            st.write(f"Output file will be: {temp_out_path}")  # Debug
             
-        # Convert using ffmpeg directly
+        # Convert using ffmpeg with explicit WebM input
         command = [
             'ffmpeg',
+            '-y',  # Overwrite output file if it exists
+            '-f', 'webm',  # Force WebM input format
             '-i', temp_in_path,
             '-acodec', 'pcm_s16le',
             '-ar', '16000',
             '-ac', '1',
-            '-f', 'wav',
             temp_out_path
         ]
         
+        st.write(f"Running command: {' '.join(command)}")  # Debug
         process = subprocess.run(command, capture_output=True, text=True)
         
         if process.returncode != 0:
             st.error(f"FFmpeg error: {process.stderr}")
             return None
             
+        st.write("Conversion completed, reading file...")  # Debug
+        
         # Read the converted file
         with open(temp_out_path, 'rb') as f:
             wav_bytes = io.BytesIO(f.read())
@@ -87,11 +94,15 @@ def convert_audio_for_whisper(audio_bytes, mime_type):
         # Cleanup
         os.unlink(temp_in_path)
         os.unlink(temp_out_path)
+        st.write("Cleanup done, returning converted audio")  # Debug
         
         return wav_bytes
         
     except Exception as e:
         st.error(f"Error converting audio: {str(e)}")
+        st.error(f"Error type: {type(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def transcribe_audio(audio_file):
