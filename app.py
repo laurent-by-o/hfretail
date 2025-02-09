@@ -54,22 +54,30 @@ def process_audio_input(audio_data, inventory_df):
 def convert_audio_for_whisper(audio_bytes, mime_type):
     """Convert audio to WAV format that Whisper expects"""
     try:
-        st.write("Starting conversion...")  # Debug
+        st.write("Starting conversion...")
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_in:
+        # Determine input format based on file signature
+        if audio_bytes.startswith(b'\x00\x00\x00\x1cftyp'):
+            input_format = 'm4a'
+            input_suffix = '.m4a'
+        else:
+            input_format = 'wav'
+            input_suffix = '.wav'
+            
+        st.write(f"Detected format: {input_format}")
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=input_suffix) as temp_in:
             temp_in.write(audio_bytes)
             temp_in_path = temp_in.name
-            st.write(f"Input file created: {temp_in_path}")  # Debug
             
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_out:
             temp_out_path = temp_out.name
-            st.write(f"Output file will be: {temp_out_path}")  # Debug
             
-        # Convert using ffmpeg with explicit WebM input
+        # Convert using ffmpeg with detected format
         command = [
             'ffmpeg',
-            '-y',  # Overwrite output file if it exists
-            '-f', 'webm',  # Force WebM input format
+            '-y',
+            '-f', input_format,
             '-i', temp_in_path,
             '-acodec', 'pcm_s16le',
             '-ar', '16000',
@@ -77,15 +85,13 @@ def convert_audio_for_whisper(audio_bytes, mime_type):
             temp_out_path
         ]
         
-        st.write(f"Running command: {' '.join(command)}")  # Debug
+        st.write(f"Running command: {' '.join(command)}")
         process = subprocess.run(command, capture_output=True, text=True)
         
         if process.returncode != 0:
             st.error(f"FFmpeg error: {process.stderr}")
             return None
             
-        st.write("Conversion completed, reading file...")  # Debug
-        
         # Read the converted file
         with open(temp_out_path, 'rb') as f:
             wav_bytes = io.BytesIO(f.read())
@@ -94,7 +100,6 @@ def convert_audio_for_whisper(audio_bytes, mime_type):
         # Cleanup
         os.unlink(temp_in_path)
         os.unlink(temp_out_path)
-        st.write("Cleanup done, returning converted audio")  # Debug
         
         return wav_bytes
         
