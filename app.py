@@ -17,7 +17,7 @@ FIREBASE_CRED_PATH = './hands-free-retail-firebase-adminsdk-fbsvc-a3c542b686.jso
 INVENTORY_PATH = 'inventory.csv'
 
 # Initialize OpenAI client
-client = openai.OpenAI(api_key=OPENAI_KEY)
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Use Streamlit's caching to initialize Firebase only once
 @st.cache_resource
