@@ -13,18 +13,18 @@ load_dotenv()  # Load environment variables
 OPENAI_KEY = os.getenv('OPENAI_API_KEY')
 
 # Configuration
-FIREBASE_CRED_PATH = './hands-free-retail-firebase-adminsdk-fbsvc-a3c542b686.json'
 INVENTORY_PATH = 'inventory.csv'
 
 # Initialize OpenAI client
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Use Streamlit's caching to initialize Firebase only once
 @st.cache_resource
 def get_firebase_app():
     """Initialize Firebase app with caching"""
     if not firebase_admin._apps:
-        cred = credentials.Certificate(FIREBASE_CRED_PATH)
+        import json
+        firebase_creds = json.loads(st.secrets["firebase"]["credentials"])
+        cred = credentials.Certificate(firebase_creds)
         firebase_admin.initialize_app(cred)
     return firebase_admin.get_app()
 
